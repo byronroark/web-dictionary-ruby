@@ -1,45 +1,30 @@
-require "webrick"
+require 'net/https'
+require 'sinatra'
+require 'sinatra/reloader' if development?
 require 'json'
+require 'erb'
 
-class AddWordFromJSON < WEBrick::HTTPServlet::AbstractServlet
-  def do_POST(request, response)
-    word       = request.query["word"]
-    definition = request.query["definition"]
-
-    File.open("dictionary.txt", "a+") do |file|
-      file.puts "#{word} = #{definition}"
-    end
-
-    response.status = 201
-    response["Access-Control-Allow-Origin"] = "*"
-    response["Content-Type"] = "application/json"
-    response.body = {status: :ok}.to_json
-  end
+get '/' do
+  @dictionary = JSON.parse(File.read("dictionary.json"))
+  erb :index
 end
 
-class ServeWordsInJSON < WEBrick::HTTPServlet::AbstractServlet
-  def do_GET(request,response)
-    dictionary_lines = File.readlines("dictionary.txt")
-
-    array_of_hashes = dictionary_lines.map do |line|
-      word, definition = line.chomp.split(" = ")
-      {
-        word: word,
-        definition: definition
-      }
-    end
-
-    response.status = 200
-    response["Content-Type"] = "application/json"
-    response["Access-Control-Allow-Origin"] = "*"
-    response.body   = array_of_hashes.to_json
-  end
+get '/search' do
+  @search = params['search_word']
+  @array_of_hashes = JSON.parse(File.read("dictionary.json"))
+  erb :search
 end
 
-server = WEBrick::HTTPServer.new(Port: 3000)
-server.mount "/words.json", ServeWordsInJSON
-server.mount "/create", AddWordFromJSON
-# Create a new class for search and mount it here
+post '/save' do
+  word = params['word']
+  definition = params['definition']
+  hash = { word: word, definition: definition }
 
-trap "INT" do server.shutdown end
-server.start
+  array_of_hashes = JSON.parse(File.read("dictionary.json"))
+  array_of_hashes << hash
+
+  File.open("dictionary.json", "w") do |file|
+    file.puts array_of_hashes.to_json
+  end
+  redirect '/'
+end
